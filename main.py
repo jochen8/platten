@@ -32,6 +32,7 @@ class Garden:
         self.slab = [[free, free, free],
                      [free, free, free],
                      [free, free, free]]
+        self.result = []
 
 
     def put_slab(self, wp, x, y, angle):
@@ -119,7 +120,7 @@ def put_slabs(g, i1, i2, i3, i4, i5):
     g.clear()
     nn2 = 0
     for a1 in (0, 90, 180, 270):
-        for a2 in (0, 90, 180, 270):
+        for a2 in (0, 90): # 180, 270 are duplicate
             for a3 in (0, 90, 180, 270):
                 for a4 in (0, 90, 180, 270):
                     for a5 in (0, 90, 180, 270):
@@ -135,12 +136,17 @@ def put_slabs(g, i1, i2, i3, i4, i5):
                         g.put_slab(wp5, x, y, a5)
                         nn2 += 1
                         if g.test_outer() and g.test_inner():
-                            g.print()
+                            #g.pr int()
+                            res = f'{g.calc_cost()}'
+                            for iy in range(3):
+                                for ix in range(3):
+                                    res += f' - {g.slab[ix][iy].typ} {g.slab[ix][iy].angle}'
+                            g.result.append(res)
 
     return nn2
 
 
-if __name__ == '__main__':
+if __name__ == '__main__0':
     calc(60)
     for cost in (66, 69, 72, 75, 78, 81, 84):
         calc(cost)
@@ -148,11 +154,11 @@ if __name__ == '__main__':
 wp1 = WegPlatte(1,0, 0, 1, 1, 0)
 wp2 = WegPlatte(2,0, 1, 0, 1, 0)
 wp3 = WegPlatte(3,0, 0, 0, 1, 0)
-wp4 = WegPlatte(4,0, 0, 0, 1, 0)
+wp4 = WegPlatte(3,0, 0, 0, 1, 0)
 wp5 = WegPlatte(5,1, 1, 0, 1, 0)
 
 
-if __name__ =='__main__':
+if __name__ =='__main__0':
     g = Garden()
     g.put_slab(wp1, 2, 1, 270)
     g.put_slab(wp2, 2, 2, 0)
@@ -169,6 +175,15 @@ if __name__ =='__main__':
                   )
     print(g.test_outer())
     print(g.test_inner())
+
+
+def print_cost_count():
+    cost_count = {}
+    for cost in res:
+        cost = int(cost.split(' ')[0])
+        cost_count[cost] = cost_count.get(cost, 0) + 1
+    for cost in sorted(cost_count.keys()):
+        print(cost, cost_count[cost])
 
 
 if __name__ == '__main__':
@@ -189,5 +204,12 @@ if __name__ == '__main__':
                             continue
                         nn += put_slabs(g, i1, i2, i3, i4, i5)
     print(nn)
+    res = set(g.result)
+    res = sorted(list(res))
+    for x in res:
+        print(x)
+
+    print_cost_count()
+
     print(time.time() - t0)
 

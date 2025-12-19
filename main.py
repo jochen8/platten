@@ -1,215 +1,193 @@
 #
+# -------------
+# | 6 | 7 | 8 |
+# -------------
+# | 3 | 4 | 5 |
+# -------------
+# | 0 | 1 | 2 |
+# -------------
 #
-# 9*8*7*6*5 * 4 ** 5 = 15_120 * 1024 = 15_482_880
+# calc_cost
+# t1 t2 t3 t3 t5
+# n1 n2 n3 n4 n5
+# a1 a2 a3 a3 a4
+#
+#
 
+import os
 import time
-
-def rotate_list_slicing(lst, offset):
-    n = len(lst)
-    # Berechnet den tatsächlichen Offset, um Rundungen zu vermeiden
-    offset = offset % n
-    # Erstellt die neue Liste durch die Kombination von zwei Slices
-    return lst[offset:] + lst[:offset]
+from PIL import Image, ImageDraw #, ImageOps
 
 
-class WegPlatte:
-    def __init__(self, typ=0, east=0, north=0, west=0, south=0, angle=0):
-        self.typ = typ
+slab_width, slab_height = 21, 21
+line_width = 3
+
+
+def make_garden_image_from_garden(garden, directory, image_number):
+    base_image = Image.new("RGB", (slab_width * 3 + 4, slab_height * 3 + 4), "white")
+    draw = ImageDraw.Draw(base_image)
+    draw.line((0, 0, 66, 0), fill="grey", width=1)
+    draw.line((0, 22, 66, 22), fill="grey", width=1)
+    draw.line((0, 44, 66, 44), fill="grey", width=1)
+    draw.line((0, 66, 66, 66), fill="grey", width=1)
+    draw.line((0, 0, 0, 66), fill="grey", width=1)
+    draw.line((22, 0, 22, 66), fill="grey", width=1)
+    draw.line((44, 0, 44, 66), fill="grey", width=1)
+    draw.line((66, 0, 66, 66), fill="grey", width=1)
+    cost = garden.calculate_cost()
+    for n in range(9):
+        slab = garden.slabs[n]
+        if slab.type == 0:
+            continue
+        else:
+            iy, ix = divmod(n, 3)
+            #print(wp.typ, wp.n, wp.angle, ix * 21, 62 - iy * 21)
+            # Open the image you want to insert (overlay)
+            overlay = Image.open(f"slab_type_{slab.type}.png").convert("RGBA")
+
+            # Rotate overlay if needed
+            overlay = overlay.rotate(slab.angle)
+            #overlay = ImageOps.mirror(overlay)
+
+            # Paste overlay onto base at position (x=ix, y=iy)
+            base_image.paste(overlay, (ix * 22 + 1, 45 - iy * 22), overlay)  # third arg keeps transparency
+
+    # Save the result
+    image_filename = f'{directory}/valid_garden_{cost:02d}_{image_number:02d}.png'
+    base_image.save(image_filename, format="PNG")
+
+
+
+class Slab:
+    def __init__(self, slab_type=0, angle=0, east=0, north=0, west=0, south=0):
+        self.type = slab_type
+        self.angle = angle
         self.east = east
         self.north = north
         self.west = west
         self.south = south
-        self.angle = angle
 
 
-free = WegPlatte(typ=0, east=0, north=0, west=0, south=0, angle=0)
 
 class Garden:
     def __init__(self):
-        #  3,1  3,2  3,3  -  2,0  2,1  2,2
-        #  2,1  2,2  2,3  -  1,0  1,1  1,2
-        #  1,1  1,2  1,3  -  0,0  0,1  0,2
-        self.slab = [[free, free, free],
-                     [free, free, free],
-                     [free, free, free]]
-        self.result = []
+        free = Slab(slab_type=0)
+        #  6  7  8
+        #  3  4  5
+        #  0  1  2
+        self.slabs = {n: free for n in range(9)}
 
 
-    def put_slab(self, wp, x, y, angle):
-        z = wp.east, wp.north, wp.west, wp.south
-        east, north, west, south = z[-angle//90:] + z[:-angle//90]
-        self.slab[x][y] = WegPlatte(wp.typ, east, north, west, south, angle)
+    def put_slab(self, slab_type, position, angle):
+        connections = {
+            0: (0, 0, 0, 0),
+            1: (0, 0, 1, 1),
+            2: (0, 1, 0, 1),
+            3: (0, 0, 0, 1),
+            5: (1, 1, 0, 1),
+        }[slab_type]
+
+        east, north, west, south = connections[-angle//90:] + connections[:-angle//90]
+        self.slabs[position] = Slab(slab_type, angle, east, north, west, south)
 
 
-    def put_slab_n(self, wp, n, angle):
-        y, x = divmod(n, 3)
-        z = wp.east, wp.north, wp.west, wp.south
-        east, north, west, south = z[-angle//90:] + z[:-angle//90]
-        self.slab[x][y] = WegPlatte(wp.typ, east, north, west, south, angle)
-
-    def print(self):
-        for iy in range(3):
-            for ix in range(3):
-                print(self.slab[ix][iy].typ,self.slab[ix][iy].angle, end=' - ')
-        print(self.calc_cost())
-
-
-    def test_outer(self):
-        x = self.slab
-        c = [
-            x[0][0].south,x[1][0].south,x[2][0].south,
-            x[2][0].east,x[2][1].east,x[2][2].east,
-            x[2][2].north,x[1][2].north,x[0][2].north,
-            x[0][2].west,x[0][1].west,x[0][0].west,
-            ]
-        # print(c)
-        c = c.count(1)
-        # print(c)
-        return c == 1
-
-
-    def test_inner(self):
-        x = self.slab
-        c = x[0][0].east  == x[1][0].west and \
-            x[1][0].east  == x[2][0].west and \
-            x[0][1].east  == x[1][1].west and \
-            x[1][1].east  == x[2][1].west and \
-            x[0][2].east  == x[1][2].west and \
-            x[1][2].east  == x[2][2].west and \
-            x[0][0].north == x[0][1].south and \
-            x[0][1].north == x[0][2].south and \
-            x[1][0].north == x[1][1].south and \
-            x[1][1].north == x[1][2].south and \
-            x[2][0].north == x[2][1].south and \
-            x[2][1].north == x[2][2].south
-
-        return c
-
-
-    def clear(self):
-        self.slab = [[free, free, free], [free, free, free], [free, free, free]]
-
-    def calc_cost(self):
+    def calculate_cost(self):
         cost = 0
-        for ix, iy in ((0,0),(0,1),(0,2)):
-            if self.slab[ix][iy].typ != 0:
+        for n in (0, 3, 6):
+            if self.slabs[n].type > 0:
                 cost += 12
-        for ix, iy in ((1,0),(1,1),(2,0)):
-            if self.slab[ix][iy].typ != 0:
+        for n in (1, 2, 4):
+            if self.slabs[n].type > 0:
                 cost += 15
-        for ix, iy in ((2,1),(1,2),(2,2)):
-            if self.slab[ix][iy].typ != 0:
+        for n in (5, 7, 8):
+            if self.slabs[n].type > 0:
                 cost += 18
         return cost
 
 
-def calc(cost=66):
-    i = 0
-    for i12 in range(3 + 1):
-        for i15 in range(3 + 1):
-            for i18 in range(3 + 1):
-                # print(i12, i15, i18)
-                if i12 * 12 + i15 * 15 + i18 * 18 == cost and i12 + i15 + i18 == 5:
-                    i += 1
-                    print(f'cost = {cost}, no {i} --- {i12}, {i15}, {i18} --- {i12} * 12 + {i15} * 15 + {i18} * 18 == {cost}')
-    if i == 0:
-        print(f'cost = {cost}, ---')
+    def test_outer(self):
+        t = [
+            self.slabs[2].east,  self.slabs[5].east,  self.slabs[8].east,
+            self.slabs[6].north, self.slabs[7].north, self.slabs[8].north,
+            self.slabs[0].west,  self.slabs[3].west,  self.slabs[6].west,
+            self.slabs[0].south, self.slabs[1].south, self.slabs[2].south,
+            ]
+        t = t.count(1)
+        return t == 1
 
 
-def put_slabs(g, i1, i2, i3, i4, i5):
-    g.clear()
-    nn2 = 0
-    for a1 in (0, 90, 180, 270):
-        for a2 in (0, 90): # 180, 270 are duplicate
-            for a3 in (0, 90, 180, 270):
-                for a4 in (0, 90, 180, 270):
-                    for a5 in (0, 90, 180, 270):
-                        y, x = divmod(i1, 3)
-                        g.put_slab(wp1, x, y, a1)
-                        y, x = divmod(i2, 3)
-                        g.put_slab(wp2, x, y, a2)
-                        y, x = divmod(i3, 3)
-                        g.put_slab(wp3, x, y, a3)
-                        y, x = divmod(i4, 3)
-                        g.put_slab(wp4, x, y, a4)
-                        y, x = divmod(i5, 3)
-                        g.put_slab(wp5, x, y, a5)
-                        nn2 += 1
-                        if g.test_outer() and g.test_inner():
-                            #g.pr int()
-                            res = f'{g.calc_cost()}'
-                            for iy in range(3):
-                                for ix in range(3):
-                                    res += f' - {g.slab[ix][iy].typ} {g.slab[ix][iy].angle}'
-                            g.result.append(res)
-
-    return nn2
+    def test_inner(self):
+        t = self.slabs[0].east  == self.slabs[1].west and \
+            self.slabs[1].east  == self.slabs[2].west and \
+            self.slabs[3].east  == self.slabs[4].west and \
+            self.slabs[4].east  == self.slabs[5].west and \
+            self.slabs[6].east  == self.slabs[7].west and \
+            self.slabs[7].east  == self.slabs[8].west and \
+            self.slabs[0].north == self.slabs[3].south and \
+            self.slabs[1].north == self.slabs[4].south and \
+            self.slabs[2].north == self.slabs[5].south and \
+            self.slabs[3].north == self.slabs[6].south and \
+            self.slabs[4].north == self.slabs[7].south and \
+            self.slabs[5].north == self.slabs[8].south
+        #  6  7  8
+        #  3  4  5
+        #  0  1  2
+        return t
 
 
-if __name__ == '__main__0':
-    calc(60)
-    for cost in (66, 69, 72, 75, 78, 81, 84):
-        calc(cost)
 
-wp1 = WegPlatte(1,0, 0, 1, 1, 0)
-wp2 = WegPlatte(2,0, 1, 0, 1, 0)
-wp3 = WegPlatte(3,0, 0, 0, 1, 0)
-wp4 = WegPlatte(3,0, 0, 0, 1, 0)
-wp5 = WegPlatte(5,1, 1, 0, 1, 0)
+def fill_and_test_garden(g, n1, a1, n2, a2, n3, a3, n4, a4, n5, a5):
+    g.put_slab(1, n1, a1)
+    g.put_slab(2, n2, a2)
+    g.put_slab(3, n3, a3)
+    g.put_slab(3, n4, a4)
+    g.put_slab(5, n5, a5)
+    return g.test_outer() and g.test_inner()
 
-
-if __name__ =='__main__0':
-    g = Garden()
-    g.put_slab(wp1, 2, 1, 270)
-    g.put_slab(wp2, 2, 2, 0)
-    g.put_slab(wp3, 1, 2, 0)
-    g.put_slab(wp4, 1, 0, 180)
-    g.put_slab(wp5, 1, 1, 0)
-    for yi in range(3):
-        for xi in range(3):
-            print(xi, yi,
-                  g.slab[xi][yi].east,
-                  g.slab[xi][yi].north,
-                  g.slab[xi][yi].west,
-                  g.slab[xi][yi].south,
-                  )
-    print(g.test_outer())
-    print(g.test_inner())
-
-
-def print_cost_count():
-    cost_count = {}
-    for cost in res:
-        cost = int(cost.split(' ')[0])
-        cost_count[cost] = cost_count.get(cost, 0) + 1
-    for cost in sorted(cost_count.keys()):
-        print(cost, cost_count[cost])
 
 
 if __name__ == '__main__':
-    g = Garden()
-    nn = 0
-    t0 = time.time()
-    for i1 in range(9):
-        for i2 in range(9):
-            for i3 in range(9):
-                for i4 in range(9):
-                    for i5 in range(9):
-                        ii = i1, i2, i3, i4, i5
-                        collision = False
-                        for ix in range(9):
-                            if ii.count(ix) > 1:
-                                collision = True
-                        if collision:
+    valid_gardens = []
+    n_all = 0
+    n_valid = 0
+    t0: float = time.time()
+    for n1 in range(9):
+        for n2 in range(9):
+            for n3 in range(9):
+                for n4 in range(9):
+                    if n3 >= n4:
+                        continue
+                    for n5 in range(9):
+                        n1_n5 = sorted([n1, n2, n3, n4, n5])
+                        if n1_n5 != sorted(list(set(n1_n5))):  # duplicates exist
                             continue
-                        nn += put_slabs(g, i1, i2, i3, i4, i5)
-    print(nn)
-    res = set(g.result)
-    res = sorted(list(res))
-    for x in res:
-        print(x)
 
-    print_cost_count()
+                        #if len(set([n1, n2, n3, n4, n5])) != 5:  # duplicates exist
+                        #    continue
 
+                        for a1 in (0, 90, 180, 270):
+                            for a2 in (0, 90):  # 180, 270 are duplicate
+                                for a3 in (0, 90, 180, 270):
+                                    for a4 in (0, 90, 180, 270):
+                                        for a5 in (0, 90, 180, 270):
+                                            n_all += 1
+                                            garden = Garden()
+                                            if fill_and_test_garden(garden, n1, a1, n2, a2,
+                                                                    n3, a3, n4, a4, n5, a5):
+                                                n_valid += 1
+                                                valid_gardens.append(garden)
+
+    print('n_all:', n_all)
+    print('n_valid:', n_valid, len(valid_gardens))
     print(time.time() - t0)
 
+    image_directory = 'images_valid_garden'
+    if len(valid_gardens) > 0 and not os.path.exists(image_directory):
+        os.mkdir(image_directory)
+    nn = {n: 0 for n in range(66, 84+1, 3)}
+    for garden in valid_gardens:
+        cost = garden.calculate_cost()
+        nn[cost] += 1
+        #make_garden_image_from_garden(garden, image_directory, nn[cost])
+
+    print(time.time() - t0)

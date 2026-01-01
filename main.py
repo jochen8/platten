@@ -135,14 +135,13 @@ class Garden:
         return t
 
 
-
-def fill_and_test_garden(g, n1, a1, n2, a2, n3, a3, n4, a4, n5, a5):
-    g.put_slab(1, n1, a1)
-    g.put_slab(2, n2, a2)
-    g.put_slab(3, n3, a3)
-    g.put_slab(3, n4, a4)
-    g.put_slab(5, n5, a5)
-    return g.test_outer() and g.test_inner()
+    def fill_and_test(self, n1, a1, n2, a2, n3, a3, n4, a4, n5, a5):
+        self.put_slab(1, n1, a1)
+        self.put_slab(2, n2, a2)
+        self.put_slab(3, n3, a3)
+        self.put_slab(3, n4, a4)
+        self.put_slab(5, n5, a5)
+        return self.test_outer() and self.test_inner()
 
 
 
@@ -172,7 +171,7 @@ if __name__ == '__main__':
                                         for a5 in (0, 90, 180, 270):
                                             n_all += 1
                                             garden = Garden()
-                                            if fill_and_test_garden(garden, n1, a1, n2, a2,
+                                            if garden.fill_and_test(n1, a1, n2, a2,
                                                                     n3, a3, n4, a4, n5, a5):
                                                 n_valid += 1
                                                 valid_gardens.append(garden)
